@@ -1,0 +1,606 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && isEmailVerified() && (
+        request.auth.token.email in ['sahurudraksh700@gmail.com'] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isNotBlocked() {
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        !('blocked' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.blocked == false;
+    }
+
+    function isValidDateString(val) {
+      return val is string && val.size() == 10 && val.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidCondition(cond) {
+      return cond in ['New', 'Good', 'Fair'];
+    }
+
+    function isValidListingStatus(st) {
+      return st in ['Available', 'Rented', 'Paused'];
+    }
+
+    function isValidApprovalStatus(st) {
+      return st in ['Approved', 'Pending', 'Rejected'];
+    }
+
+    function isValidRequestStatus(st) {
+      return st in ['Pending', 'Accepted', 'Returned', 'Declined', 'Cancelled'];
+    }
+
+    function isValidReportStatus(st) {
+      return st in ['Open', 'Dismissed', 'Resolved'];
+    }
+
+    function isValidOptionalGeoFields(data) {
+      return (!('state' in data) || (data.state is string && data.state.size() <= 80))
+        && (!('city' in data) || (data.city is string && data.city.size() <= 80))
+        && (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90))
+        && (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180));
+    }
+
+    // Validation Blueprint: UserProfile
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'firstName', 'college', 'photoUrl', 'rating', 'ratingCount', 'blocked', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'firstName', 'college', 'photoUrl', 'rating', 'ratingCount', 'blocked', 'state', 'city', 'lat', 'lng', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 80
+        && data.firstName is string && data.firstName.size() >= 1 && data.firstName.size() <= 40
+        && data.college is string && data.college.size() >= 2 && data.college.size() <= 120
+        && data.photoUrl is string && data.photoUrl.size() <= 500
+        && data.rating is number && data.rating >= 0 && data.rating <= 5
+        && data.ratingCount is number && data.ratingCount >= 0 && data.ratingCount <= 10000
+        && data.blocked is bool
+        && isValidOptionalGeoFields(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: UserContact (PII)
+    function isValidUserContact(data) {
+      return data.keys().hasAll(['uid', 'phone', 'email', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'phone', 'email', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.phone is string && data.phone.size() >= 7 && data.phone.size() <= 24
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 120
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: Listing
+    function isValidListing(data) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'ownerFirstName', 'ownerName', 'ownerCollege', 'ownerPhotoUrl', 'ownerRating',
+          'title', 'description', 'category', 'photos', 'pricePerDay', 'deposit', 'condition',
+          'pickupLocation', 'availableFrom', 'availableTo', 'status', 'featured', 'approvalStatus',
+          'bookedRanges', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'ownerFirstName', 'ownerName', 'ownerCollege', 'ownerPhotoUrl', 'ownerRating',
+          'title', 'description', 'category', 'photos', 'pricePerDay', 'deposit', 'condition',
+          'pickupLocation', 'state', 'city', 'lat', 'lng', 'availableFrom', 'availableTo', 'status',
+          'featured', 'approvalStatus', 'bookedRanges', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.ownerId)
+        && data.ownerFirstName is string && data.ownerFirstName.size() >= 1 && data.ownerFirstName.size() <= 40
+        && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 80
+        && data.ownerCollege is string && data.ownerCollege.size() >= 2 && data.ownerCollege.size() <= 120
+        && data.ownerPhotoUrl is string && data.ownerPhotoUrl.size() <= 500
+        && data.ownerRating is number && data.ownerRating >= 0 && data.ownerRating <= 5
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 100
+        && data.description is string && data.description.size() >= 10 && data.description.size() <= 1200
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 50
+        && data.photos is list && data.photos.size() >= 1 && data.photos.size() <= 4
+        && data.photos[0] is string && data.photos[0].size() >= 5 && data.photos[0].size() <= 260000
+        && data.pricePerDay is number && data.pricePerDay >= 10 && data.pricePerDay <= 50000
+        && data.deposit is number && data.deposit >= 0 && data.deposit <= 100000
+        && isValidCondition(data.condition)
+        && data.pickupLocation is string && data.pickupLocation.size() >= 3 && data.pickupLocation.size() <= 140
+        && isValidOptionalGeoFields(data)
+        && isValidDateString(data.availableFrom)
+        && isValidDateString(data.availableTo)
+        && data.availableTo >= data.availableFrom
+        && isValidListingStatus(data.status)
+        && data.featured is bool
+        && isValidApprovalStatus(data.approvalStatus)
+        && data.bookedRanges is list && data.bookedRanges.size() <= 50
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: RentalRequest
+    function isValidRentalRequest(data) {
+      return data.keys().hasAll([
+          'id', 'listingId', 'listingTitle', 'listingPhoto', 'pickupLocation',
+          'ownerId', 'ownerName', 'ownerCollege', 'ownerContact',
+          'renterId', 'renterName', 'renterCollege', 'renterPhotoUrl',
+          'startDate', 'endDate', 'days', 'pricePerDay', 'deposit', 'totalAmount',
+          'message', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'listingId', 'listingTitle', 'listingPhoto', 'pickupLocation',
+          'ownerId', 'ownerName', 'ownerCollege', 'ownerContact',
+          'renterId', 'renterName', 'renterCollege', 'renterPhotoUrl',
+          'startDate', 'endDate', 'days', 'pricePerDay', 'deposit', 'totalAmount',
+          'message', 'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.listingId)
+        && data.listingTitle is string && data.listingTitle.size() >= 3 && data.listingTitle.size() <= 100
+        && data.listingPhoto is string && data.listingPhoto.size() <= 220000
+        && data.pickupLocation is string && data.pickupLocation.size() >= 3 && data.pickupLocation.size() <= 140
+        && isValidId(data.ownerId)
+        && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 80
+        && data.ownerCollege is string && data.ownerCollege.size() >= 2 && data.ownerCollege.size() <= 120
+        && data.ownerContact is string && data.ownerContact.size() <= 30
+        && isValidId(data.renterId)
+        && data.renterId != data.ownerId
+        && data.renterName is string && data.renterName.size() >= 2 && data.renterName.size() <= 80
+        && data.renterCollege is string && data.renterCollege.size() >= 2 && data.renterCollege.size() <= 120
+        && data.renterPhotoUrl is string && data.renterPhotoUrl.size() <= 500
+        && isValidDateString(data.startDate)
+        && isValidDateString(data.endDate)
+        && data.endDate >= data.startDate
+        && data.days is number && data.days >= 1 && data.days <= 90
+        && data.pricePerDay is number && data.pricePerDay >= 10 && data.pricePerDay <= 50000
+        && data.deposit is number && data.deposit >= 0 && data.deposit <= 100000
+        && data.totalAmount is number && data.totalAmount >= 10 && data.totalAmount <= 5000000
+        && data.message is string && data.message.size() <= 500
+        && isValidRequestStatus(data.status)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: ListingReport
+    function isValidReport(data) {
+      return data.keys().hasAll(['id', 'listingId', 'listingTitle', 'reporterId', 'reason', 'details', 'status', 'createdAt'])
+        && data.keys().hasOnly(['id', 'listingId', 'listingTitle', 'reporterId', 'reason', 'details', 'status', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.listingId)
+        && data.listingTitle is string && data.listingTitle.size() >= 3 && data.listingTitle.size() <= 100
+        && isValidId(data.reporterId)
+        && data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 80
+        && data.details is string && data.details.size() <= 500
+        && isValidReportStatus(data.status)
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: SiteSettings & CategoryConfig
+    function isValidSiteSettings(data) {
+      return data.keys().hasAll(['brandName', 'logoText', 'tagline', 'heroSubtitle', 'accentColor', 'contactEmail', 'supportWhatsapp', 'footerText', 'requireApproval', 'updatedAt'])
+        && data.keys().hasOnly(['brandName', 'logoText', 'tagline', 'heroSubtitle', 'accentColor', 'contactEmail', 'supportWhatsapp', 'footerText', 'requireApproval', 'updatedAt'])
+        && data.brandName is string && data.brandName.size() >= 2 && data.brandName.size() <= 60
+        && data.logoText is string && data.logoText.size() >= 2 && data.logoText.size() <= 60
+        && data.tagline is string && data.tagline.size() >= 4 && data.tagline.size() <= 140
+        && data.heroSubtitle is string && data.heroSubtitle.size() >= 10 && data.heroSubtitle.size() <= 300
+        && data.accentColor is string && data.accentColor.size() >= 4 && data.accentColor.size() <= 20
+        && data.contactEmail is string && data.contactEmail.size() >= 5 && data.contactEmail.size() <= 120
+        && data.supportWhatsapp is string && data.supportWhatsapp.size() >= 5 && data.supportWhatsapp.size() <= 30
+        && data.footerText is string && data.footerText.size() >= 4 && data.footerText.size() <= 160
+        && data.requireApproval is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCategoryConfig(data) {
+      return data.keys().hasAll(['items', 'updatedAt'])
+        && data.keys().hasOnly(['items', 'updatedAt'])
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 25
+        && data.items[0] is string && data.items[0].size() >= 2 && data.items[0].size() <= 50
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidIdList(listVal) {
+      return listVal is list
+        && listVal.size() <= 50
+        && (listVal.size() == 0 || (listVal[0] is string && listVal[0].size() >= 1 && listVal[0].size() <= 128));
+    }
+
+    function isValidSeedState(data) {
+      return data.keys().hasAll(['deletedIds', 'hiddenIds', 'featuredIds', 'unfeaturedIds', 'updatedAt'])
+        && data.keys().hasOnly(['deletedIds', 'hiddenIds', 'featuredIds', 'unfeaturedIds', 'updatedAt'])
+        && isValidIdList(data.deletedIds)
+        && isValidIdList(data.hiddenIds)
+        && isValidIdList(data.featuredIds)
+        && isValidIdList(data.unfeaturedIds)
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: ChatMessage
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['id', 'requestId', 'ownerId', 'renterId', 'senderId', 'senderName', 'text', 'createdAt'])
+        && data.keys().hasOnly(['id', 'requestId', 'ownerId', 'renterId', 'senderId', 'senderName', 'text', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.requestId)
+        && isValidId(data.ownerId)
+        && isValidId(data.renterId)
+        && isValidId(data.senderId)
+        && data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 80
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: UserReview
+    function isValidUserReview(data) {
+      return data.keys().hasAll([
+          'id', 'requestId', 'listingId', 'listingTitle', 'reviewerId', 'reviewerName',
+          'reviewerPhotoUrl', 'reviewerRole', 'revieweeId', 'revieweeName', 'rating', 'comment', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'requestId', 'listingId', 'listingTitle', 'reviewerId', 'reviewerName',
+          'reviewerPhotoUrl', 'reviewerRole', 'revieweeId', 'revieweeName', 'rating', 'comment', 'createdAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.requestId)
+        && isValidId(data.listingId)
+        && data.listingTitle is string && data.listingTitle.size() >= 3 && data.listingTitle.size() <= 100
+        && isValidId(data.reviewerId)
+        && data.reviewerName is string && data.reviewerName.size() >= 2 && data.reviewerName.size() <= 80
+        && data.reviewerPhotoUrl is string && data.reviewerPhotoUrl.size() <= 500
+        && data.reviewerRole in ['renter', 'owner']
+        && isValidId(data.revieweeId)
+        && data.revieweeId != data.reviewerId
+        && data.revieweeName is string && data.revieweeName.size() >= 2 && data.revieweeName.size() <= 80
+        && data.rating is int && data.rating >= 1 && data.rating <= 5
+        && data.comment is string && data.comment.size() <= 600
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: SavedItem
+    function isValidSavedItem(data) {
+      return data.keys().hasAll(['id', 'userId', 'listingId', 'listingTitle', 'listingPhoto', 'pricePerDay', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'listingId', 'listingTitle', 'listingPhoto', 'pricePerDay', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && isValidId(data.listingId)
+        && data.listingTitle is string && data.listingTitle.size() >= 1 && data.listingTitle.size() <= 100
+        && data.listingPhoto is string && data.listingPhoto.size() <= 260000
+        && data.pricePerDay is number && data.pricePerDay >= 10 && data.pricePerDay <= 50000
+        && data.createdAt is timestamp;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isAdmin();
+
+      allow create: if isEmailVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().blocked == false
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isEmailVerified()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['blocked', 'updatedAt']) ||
+          (
+            isOwner(userId)
+            && !('blocked' in existing())
+            && incoming().blocked == false
+            && incoming().diff(existing()).affectedKeys().hasOnly(['blocked', 'updatedAt'])
+          ) ||
+          (
+            isOwner(userId)
+            && ('blocked' in existing())
+            && incoming().blocked == existing().blocked
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'firstName', 'college', 'photoUrl', 'state', 'city', 'lat', 'lng', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if false;
+
+      match /private/{docId} {
+        allow get: if isOwner(userId) && isValidId(docId);
+        allow list: if false;
+
+        allow create: if isEmailVerified()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'contact'
+          && isOwner(userId)
+          && isValidUserContact(incoming())
+          && incoming().updatedAt == request.time;
+
+        allow update: if isEmailVerified()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'contact'
+          && isOwner(userId)
+          && isValidUserContact(incoming())
+          && incoming().uid == existing().uid
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['phone', 'email', 'updatedAt']);
+
+        allow delete: if false;
+      }
+
+      // Personal wishlist / saved items for a student
+      match /savedItems/{listingId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(listingId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isEmailVerified()
+          && isValidId(userId)
+          && isValidId(listingId)
+          && isOwner(userId)
+          && isValidSavedItem(incoming())
+          && incoming().id == listingId
+          && incoming().listingId == listingId
+          && incoming().userId == request.auth.uid
+          && incoming().createdAt == request.time;
+
+        allow update: if false;
+
+        allow delete: if isEmailVerified()
+          && isValidId(userId)
+          && isValidId(listingId)
+          && isOwner(userId);
+      }
+    }
+
+    // Listings collection
+    match /listings/{listingId} {
+      allow get: if isValidId(listingId);
+      allow list: if true;
+
+      allow create: if isEmailVerified()
+        && isValidId(listingId)
+        && isNotBlocked()
+        && isValidListing(incoming())
+        && incoming().id == listingId
+        && (isAdmin() || incoming().ownerId == request.auth.uid)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (isAdmin() || (incoming().featured == false && incoming().approvalStatus in ['Approved', 'Pending']));
+
+      allow update: if isEmailVerified()
+        && isValidId(listingId)
+        && isValidListing(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(existing().ownerId)
+            && isNotBlocked()
+            && incoming().featured == existing().featured
+            && incoming().approvalStatus == existing().approvalStatus
+            && (
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'title', 'description', 'category', 'photos', 'pricePerDay', 'deposit',
+                'condition', 'pickupLocation', 'state', 'city', 'lat', 'lng',
+                'availableFrom', 'availableTo', 'status',
+                'ownerFirstName', 'ownerName', 'ownerCollege', 'ownerPhotoUrl', 'updatedAt'
+              ]) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['bookedRanges', 'status', 'updatedAt'])
+            )
+          )
+        );
+
+      allow delete: if isEmailVerified()
+        && isValidId(listingId)
+        && (isAdmin() || isOwner(existing().ownerId));
+    }
+
+    // Rental requests collection
+    match /rentalRequests/{requestId} {
+      allow get: if isSignedIn()
+        && isValidId(requestId)
+        && (isAdmin() || existing().renterId == request.auth.uid || existing().ownerId == request.auth.uid);
+
+      allow list: if isSignedIn()
+        && (isAdmin() || resource.data.renterId == request.auth.uid || resource.data.ownerId == request.auth.uid);
+
+      allow create: if isEmailVerified()
+        && isValidId(requestId)
+        && isNotBlocked()
+        && isValidRentalRequest(incoming())
+        && incoming().id == requestId
+        && incoming().renterId == request.auth.uid
+        && incoming().status == 'Pending'
+        && incoming().ownerContact == ''
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/listings/$(incoming().listingId));
+
+      allow update: if isEmailVerified()
+        && isValidId(requestId)
+        && isValidRentalRequest(incoming())
+        && incoming().id == existing().id
+        && incoming().listingId == existing().listingId
+        && incoming().ownerId == existing().ownerId
+        && incoming().renterId == existing().renterId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && !(existing().status in ['Returned', 'Declined', 'Cancelled'])
+        && (
+          (
+            isAdmin()
+            && incoming().status == 'Cancelled'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          ) ||
+          (
+            isOwner(existing().ownerId)
+            && existing().status == 'Pending'
+            && incoming().status == 'Accepted'
+            && incoming().ownerContact.size() >= 7
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'ownerContact', 'updatedAt'])
+          ) ||
+          (
+            isOwner(existing().ownerId)
+            && existing().status == 'Pending'
+            && incoming().status == 'Declined'
+            && incoming().ownerContact == ''
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          ) ||
+          (
+            isOwner(existing().ownerId)
+            && existing().status == 'Accepted'
+            && incoming().status == 'Returned'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          ) ||
+          (
+            isOwner(existing().renterId)
+            && existing().status == 'Pending'
+            && incoming().status == 'Cancelled'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+
+      allow delete: if false;
+
+      // Participant-only real-time chat messages for a rental request
+      match /messages/{messageId} {
+        allow get: if isSignedIn()
+          && isValidId(requestId)
+          && isValidId(messageId)
+          && (existing().ownerId == request.auth.uid || existing().renterId == request.auth.uid);
+
+        allow list: if isSignedIn()
+          && (resource.data.ownerId == request.auth.uid || resource.data.renterId == request.auth.uid);
+
+        allow create: if isEmailVerified()
+          && isValidId(requestId)
+          && isValidId(messageId)
+          && isValidChatMessage(incoming())
+          && incoming().id == messageId
+          && incoming().requestId == requestId
+          && incoming().senderId == request.auth.uid
+          && incoming().createdAt == request.time
+          && isNotBlocked()
+          && exists(/databases/$(database)/documents/rentalRequests/$(requestId))
+          && incoming().ownerId == get(/databases/$(database)/documents/rentalRequests/$(requestId)).data.ownerId
+          && incoming().renterId == get(/databases/$(database)/documents/rentalRequests/$(requestId)).data.renterId
+          && (request.auth.uid == incoming().ownerId || request.auth.uid == incoming().renterId);
+
+        allow update, delete: if false;
+      }
+    }
+
+    // Reviews collection (public campus reputation, one per participant per completed rental)
+    match /reviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if true;
+
+      allow create: if isEmailVerified()
+        && isValidId(reviewId)
+        && isValidUserReview(incoming())
+        && incoming().id == reviewId
+        && incoming().id == incoming().requestId + '_' + request.auth.uid
+        && incoming().reviewerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && isNotBlocked()
+        && exists(/databases/$(database)/documents/rentalRequests/$(incoming().requestId))
+        && get(/databases/$(database)/documents/rentalRequests/$(incoming().requestId)).data.status == 'Returned'
+        && incoming().listingId == get(/databases/$(database)/documents/rentalRequests/$(incoming().requestId)).data.listingId
+        && (
+          (
+            request.auth.uid == get(/databases/$(database)/documents/rentalRequests/$(incoming().requestId)).data.renterId
+            && incoming().revieweeId == get(/databases/$(database)/documents/rentalRequests/$(incoming().requestId)).data.ownerId
+            && incoming().reviewerRole == 'renter'
+          ) ||
+          (
+            request.auth.uid == get(/databases/$(database)/documents/rentalRequests/$(incoming().requestId)).data.ownerId
+            && incoming().revieweeId == get(/databases/$(database)/documents/rentalRequests/$(incoming().requestId)).data.renterId
+            && incoming().reviewerRole == 'owner'
+          )
+        );
+
+      allow update: if false;
+      allow delete: if isAdmin() && isValidId(reviewId);
+    }
+
+    // Safety reports collection
+    match /reports/{reportId} {
+      allow get: if isSignedIn()
+        && isValidId(reportId)
+        && (isAdmin() || existing().reporterId == request.auth.uid);
+
+      allow list: if isSignedIn()
+        && (isAdmin() || resource.data.reporterId == request.auth.uid);
+
+      allow create: if isEmailVerified()
+        && isValidId(reportId)
+        && isValidReport(incoming())
+        && incoming().id == reportId
+        && incoming().reporterId == request.auth.uid
+        && incoming().status == 'Open'
+        && incoming().createdAt == request.time;
+
+      allow update: if isAdmin()
+        && isValidId(reportId)
+        && isValidReport(incoming())
+        && incoming().id == existing().id
+        && incoming().reporterId == existing().reporterId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+
+      allow delete: if isAdmin() && isValidId(reportId);
+    }
+
+    // Live site settings and category ordering
+    match /settings/{docId} {
+      allow get: if isValidId(docId);
+      allow list: if false;
+
+      allow create, update: if isAdmin()
+        && isValidId(docId)
+        && incoming().updatedAt == request.time
+        && (
+          (docId == 'site' && isValidSiteSettings(incoming())) ||
+          (docId == 'categories' && isValidCategoryConfig(incoming())) ||
+          (docId == 'seedState' && isValidSeedState(incoming()))
+        );
+
+      allow delete: if false;
+    }
+  }
+}

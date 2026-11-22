@@ -1,0 +1,265 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public campus student profile without PII",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "firstName": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "college": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "rating": { "type": "number" },
+        "ratingCount": { "type": "number" },
+        "blocked": { "type": "boolean" },
+        "state": { "type": "string", "maxLength": 80 },
+        "city": { "type": "string", "maxLength": 80 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "firstName", "college", "photoUrl", "rating", "ratingCount", "blocked", "createdAt", "updatedAt"]
+    },
+    "UserContact": {
+      "title": "UserContact",
+      "description": "Private student PII contact info isolated to the owning user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "phone": { "type": "string", "minLength": 7, "maxLength": 24 },
+        "email": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "phone", "email", "updatedAt"]
+    },
+    "Listing": {
+      "title": "Listing",
+      "description": "Campus rental item posted by a student owner or admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerFirstName": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "ownerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "ownerCollege": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "ownerPhotoUrl": { "type": "string", "maxLength": 500 },
+        "ownerRating": { "type": "number" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "description": { "type": "string", "minLength": 10, "maxLength": 1200 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "photos": { "type": "array" },
+        "pricePerDay": { "type": "number" },
+        "deposit": { "type": "number" },
+        "condition": { "type": "string", "enum": ["New", "Good", "Fair"] },
+        "pickupLocation": { "type": "string", "minLength": 3, "maxLength": 140 },
+        "state": { "type": "string", "maxLength": 80 },
+        "city": { "type": "string", "maxLength": 80 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "availableFrom": { "type": "string", "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "availableTo": { "type": "string", "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "status": { "type": "string", "enum": ["Available", "Rented", "Paused"] },
+        "featured": { "type": "boolean" },
+        "approvalStatus": { "type": "string", "enum": ["Approved", "Pending", "Rejected"] },
+        "bookedRanges": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "ownerId", "ownerFirstName", "ownerName", "ownerCollege", "ownerPhotoUrl", "ownerRating",
+        "title", "description", "category", "photos", "pricePerDay", "deposit", "condition",
+        "pickupLocation", "availableFrom", "availableTo", "status", "featured", "approvalStatus",
+        "bookedRanges", "createdAt", "updatedAt"
+      ]
+    },
+    "RentalRequest": {
+      "title": "RentalRequest",
+      "description": "Booking request from a student renter to an item owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingTitle": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "listingPhoto": { "type": "string", "maxLength": 220000 },
+        "pickupLocation": { "type": "string", "minLength": 3, "maxLength": 140 },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "ownerCollege": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "ownerContact": { "type": "string", "maxLength": 30 },
+        "renterId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "renterName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "renterCollege": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "renterPhotoUrl": { "type": "string", "maxLength": 500 },
+        "startDate": { "type": "string", "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "endDate": { "type": "string", "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "days": { "type": "number" },
+        "pricePerDay": { "type": "number" },
+        "deposit": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "message": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Returned", "Declined", "Cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "listingId", "listingTitle", "listingPhoto", "pickupLocation",
+        "ownerId", "ownerName", "ownerCollege", "ownerContact",
+        "renterId", "renterName", "renterCollege", "renterPhotoUrl",
+        "startDate", "endDate", "days", "pricePerDay", "deposit", "totalAmount",
+        "message", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "ListingReport": {
+      "title": "ListingReport",
+      "description": "Safety or policy report submitted by a signed-in student",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingTitle": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "reporterId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reason": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "details": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["Open", "Dismissed", "Resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "listingId", "listingTitle", "reporterId", "reason", "details", "status", "createdAt"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Live-editable site configuration managed from Admin Panel",
+      "type": "object",
+      "properties": {
+        "brandName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "logoText": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "tagline": { "type": "string", "minLength": 4, "maxLength": 140 },
+        "heroSubtitle": { "type": "string", "minLength": 10, "maxLength": 300 },
+        "accentColor": { "type": "string", "maxLength": 20 },
+        "contactEmail": { "type": "string", "maxLength": 120 },
+        "supportWhatsapp": { "type": "string", "maxLength": 30 },
+        "footerText": { "type": "string", "maxLength": 160 },
+        "requireApproval": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["brandName", "logoText", "tagline", "heroSubtitle", "accentColor", "contactEmail", "supportWhatsapp", "footerText", "requireApproval", "updatedAt"]
+    },
+    "CategoryConfig": {
+      "title": "CategoryConfig",
+      "description": "Dynamic ordered category list managed from Admin Panel",
+      "type": "object",
+      "properties": {
+        "items": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["items", "updatedAt"]
+    },
+    "SeedState": {
+      "title": "SeedState",
+      "description": "Global admin visibility, featured, and removal overrides for starter seed listings",
+      "type": "object",
+      "properties": {
+        "deletedIds": { "type": "array" },
+        "hiddenIds": { "type": "array" },
+        "featuredIds": { "type": "array" },
+        "unfeaturedIds": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["deletedIds", "hiddenIds", "featuredIds", "unfeaturedIds", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Real-time message between renter and owner scoped to a rental request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "requestId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "renterId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "requestId", "ownerId", "renterId", "senderId", "senderName", "text", "createdAt"]
+    },
+    "UserReview": {
+      "title": "UserReview",
+      "description": "Verified post-rental star rating and review between renter and owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "requestId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingTitle": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "reviewerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reviewerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "reviewerPhotoUrl": { "type": "string", "maxLength": 500 },
+        "reviewerRole": { "type": "string", "enum": ["renter", "owner"] },
+        "revieweeId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "revieweeName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "maxLength": 600 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "requestId", "listingId", "listingTitle", "reviewerId", "reviewerName",
+        "reviewerPhotoUrl", "reviewerRole", "revieweeId", "revieweeName", "rating", "comment", "createdAt"
+      ]
+    },
+    "SavedItem": {
+      "title": "SavedItem",
+      "description": "Bookmarked rental listing saved to a student's wishlist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingTitle": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "listingPhoto": { "type": "string", "maxLength": 260000 },
+        "pricePerDay": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "listingId", "listingTitle", "listingPhoto", "pricePerDay", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public campus student profile documents"
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserContact" },
+      "description": "Owner-only PII contact details"
+    },
+    "/users/{userId}/savedItems/{listingId}": {
+      "schema": { "$ref": "#/entities/SavedItem" },
+      "description": "Bookmarked listings saved in a student's personal wishlist"
+    },
+    "/listings/{listingId}": {
+      "schema": { "$ref": "#/entities/Listing" },
+      "description": "Marketplace rental listings"
+    },
+    "/rentalRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/RentalRequest" },
+      "description": "Rental booking requests and status transitions"
+    },
+    "/rentalRequests/{requestId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Real-time chat messages between the rental owner and renter"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/UserReview" },
+      "description": "Completed-rental star ratings and reviews for campus users"
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/ListingReport" },
+      "description": "User-submitted safety reports for listings"
+    },
+    "/settings/{docId}": {
+      "schema": { "$ref": "#/entities/SiteSettings" },
+      "description": "Live site settings and category configuration"
+    }
+  }
+}
